@@ -6,7 +6,7 @@
     "cbd": "<1%",
     "genetics": "Sativa 65% / Indica 35%",
     "flowering": "9 semanas",
-    "price": 38
+    "price": 200
   },
   {
     "id": "OW-B07",
@@ -15,7 +15,7 @@
     "cbd": "1.2%",
     "genetics": "Indica dominante",
     "flowering": "8 semanas",
-    "price": 45
+    "price": 200
   },
   {
     "id": "OW-C22",
@@ -24,6 +24,6 @@
     "cbd": "<1%",
     "genetics": "Sativa dominante",
     "flowering": "10 semanas",
-    "price": 34
+    "price": 200
   }
 ]
