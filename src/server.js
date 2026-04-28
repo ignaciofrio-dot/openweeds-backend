@@ -96,7 +96,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.post("/api/orders/checkout", requireAuth, async (req, res) => {
-  const { items, shipping, shippingAddress } = req.body;
+  const { items, shippingAddress } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "El carrito esta vacio" });
   }
@@ -131,9 +131,7 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
     });
   }
 
-  const shippingPrice = shipping === "express" ? 12 : 6;
   const itemsTotal = normalizedItems.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
-  const grandTotal = itemsTotal + shippingPrice;
 
   const order = {
     id: `OW-${Date.now()}`,
@@ -141,10 +139,8 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
     userEmail: req.user.email,
     status: "pending",
     items: normalizedItems,
-    shipping,
-    shippingPrice,
     shippingAddress: { fullName, address, city },
-    total: grandTotal,
+    total: itemsTotal,
     createdAt: new Date().toISOString(),
     mpPreferenceId: null,
     mpPaymentId: null
@@ -170,16 +166,9 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
             id: item.productId,
             title: item.title,
             quantity: item.qty,
-            currency_id: "USD",
+            currency_id: "ARS",
             unit_price: item.unitPrice
-          })),
-          {
-            id: "shipping",
-            title: shipping === "express" ? "Envio express" : "Envio standard",
-            quantity: 1,
-            currency_id: "USD",
-            unit_price: shippingPrice
-          }
+          }))
         ],
         payer: { email: req.user.email },
         back_urls: {
