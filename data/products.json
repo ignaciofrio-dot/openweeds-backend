@@ -5,25 +5,25 @@
     "thc": "24%",
     "cbd": "<1%",
     "genetics": "Sativa 65% / Indica 35%",
-    "flowering": "9 semanas",
+    "flowering": "6 semanas",
     "price": 200
   },
   {
     "id": "OW-B07",
-    "name": "Patagonia Kush",
+    "name": "Patagonia Kush Auto",
     "thc": "27%",
     "cbd": "1.2%",
     "genetics": "Indica dominante",
-    "flowering": "8 semanas",
+    "flowering": "5 semanas",
     "price": 200
   },
   {
     "id": "OW-C22",
-    "name": "Rio Turbo Haze",
+    "name": "Rio Turbio Haze Auto",
     "thc": "22%",
     "cbd": "<1%",
     "genetics": "Sativa dominante",
-    "flowering": "10 semanas",
+    "flowering": "6 semanas",
     "price": 200
   }
 ]
