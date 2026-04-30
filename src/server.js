@@ -127,7 +127,7 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
     status: "pending",
     items: normalizedItems,
     shippingCost: shippingCost, 
-    shippingAddress: { fullName, address, city, phone }, 
+    shippingAddress: { fullName, address, city, phone, email }, 
     total: itemsTotal + shippingCost, 
     createdAt: new Date().toISOString()
   };
