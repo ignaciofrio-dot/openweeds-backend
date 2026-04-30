@@ -95,9 +95,10 @@ app.post("/api/auth/login", async (req, res) => {
   return res.json({ token, user: { id: user.id, email: user.email } });
 });
 
+// --- RUTA DE CHECKOUT MODIFICADA ---
 app.post("/api/orders/checkout", requireAuth, async (req, res) => {
-  const { items, shipping, shippingCost, shippingAddress } = req.body;
-
+  const { items, shipping, shippingAddress } = req.body; // Recibimos shipping
+  
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "El carrito esta vacio" });
   }
@@ -108,15 +109,11 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
   const fullName = String(shippingAddress.fullName || "").trim();
   const address = String(shippingAddress.address || "").trim();
   const city = String(shippingAddress.city || "").trim();
-  const phone = String(shippingAddress.phone || "").trim();
-
-  const normalizedShippingCost = Number(shippingCost ?? shipping ?? 0);
+  const phone = String(shippingAddress.phone || "").trim(); // Recibimos teléfono
+  const shippingCost = Number(shipping || 0); // Convertimos costo a número
 
   if (fullName.length < 4 || address.length < 6 || city.length < 2) {
     return res.status(400).json({ error: "Direccion de envio invalida" });
-  }
-  if (!Number.isFinite(normalizedShippingCost) || normalizedShippingCost < 0 || normalizedShippingCost > 50000) {
-    return res.status(400).json({ error: "Costo de envio invalido" });
   }
 
   const products = readJson("products.json");
@@ -127,7 +124,6 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
     if (!product) {
       return res.status(400).json({ error: `Producto no valido: ${item.productId}` });
     }
-
     const qty = Number(item.qty || 0);
     if (qty <= 0) {
       return res.status(400).json({ error: `Cantidad invalida: ${item.productId}` });
@@ -142,7 +138,6 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
   }
 
   const itemsTotal = normalizedItems.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
-  const grandTotal = itemsTotal + normalizedShippingCost;
 
   const order = {
     id: `OW-${Date.now()}`,
@@ -150,9 +145,9 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
     userEmail: req.user.email,
     status: "pending",
     items: normalizedItems,
-    shippingCost: normalizedShippingCost,
-    shippingAddress: { fullName, address, city, phone },
-    total: grandTotal,
+    shippingCost: shippingCost, 
+    shippingAddress: { fullName, address, city, phone }, 
+    total: itemsTotal + shippingCost, 
     createdAt: new Date().toISOString(),
     mpPreferenceId: null,
     mpPaymentId: null
@@ -172,6 +167,7 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
   try {
     const preference = new Preference(mpClient);
 
+    // Construimos la lista de items para Mercado Pago
     const mpItems = normalizedItems.map((item) => ({
       id: item.productId,
       title: item.title,
@@ -180,20 +176,23 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
       unit_price: item.unitPrice
     }));
 
-    if (normalizedShippingCost > 0) {
+    // Si hay costo de envío, lo agregamos como un item para que se cobre
+    if (shippingCost > 0) {
       mpItems.push({
         id: "envio-ow",
-        title: "Costo de Envio",
+        title: "Costo de Envío",
         quantity: 1,
         currency_id: "ARS",
-        unit_price: normalizedShippingCost
+        unit_price: shippingCost
       });
     }
 
     const response = await preference.create({
       body: {
         items: mpItems,
-        payer: { email: req.user.email },
+        payer: { 
+          email: req.user.email 
+        },
         back_urls: {
           success: `${frontendUrls[0] || "http://localhost:5500"}/index.html?payment=success`,
           failure: `${frontendUrls[0] || "http://localhost:5500"}/index.html?payment=failure`,
@@ -220,4 +219,68 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: "No se pudo crear preferencia", detail: error.message });
   }
+});
+
+app.post("/api/payments/webhook", async (req, res) => {
+  try {
+    const topic = req.query.type || req.query.topic;
+    const paymentId = req.query["data.id"] || req.body?.data?.id;
+
+    if (!mpClient || topic !== "payment" || !paymentId) {
+      return res.status(200).json({ ok: true });
+    }
+
+    const paymentClient = new Payment(mpClient);
+    const payment = await paymentClient.get({ id: paymentId });
+
+    const externalReference = payment.external_reference;
+    if (!externalReference) {
+      return res.status(200).json({ ok: true });
+    }
+
+    const orders = readJson("orders.json");
+    const idx = orders.findIndex((o) => o.id === externalReference);
+    if (idx < 0) {
+      return res.status(200).json({ ok: true });
+    }
+
+    orders[idx].mpPaymentId = String(paymentId);
+    if (payment.status === "approved") {
+      orders[idx].status = "paid";
+    } else if (payment.status === "rejected") {
+      orders[idx].status = "rejected";
+    } else {
+      orders[idx].status = "pending";
+    }
+    orders[idx].updatedAt = new Date().toISOString();
+    writeJson("orders.json", orders);
+
+    return res.status(200).json({ ok: true });
+  } catch (error) {
+    return res.status(200).json({ ok: true, ignored: true, detail: error.message });
+  }
+});
+
+app.get("/api/orders/mine", requireAuth, (req, res) => {
+  const orders = readJson("orders.json");
+  const mine = orders.filter((o) => o.userId === req.user.userId);
+  res.json(mine);
+});
+
+app.get("/api/orders/:orderId/status", requireAuth, (req, res) => {
+  const orders = readJson("orders.json");
+  const order = orders.find((o) => o.id === req.params.orderId && o.userId === req.user.userId);
+  if (!order) {
+    return res.status(404).json({ error: "Orden no encontrada" });
+  }
+  return res.json({
+    id: order.id,
+    status: order.status,
+    total: order.total,
+    updatedAt: order.updatedAt || order.createdAt
+  });
+});
+
+app.listen(port, () => {
+  console.log(`OpenWeeds API escuchando en http://localhost:${port}`);
 });
