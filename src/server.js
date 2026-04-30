@@ -14,7 +14,9 @@ const frontendUrls = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "
   .map((url) => url.trim())
   .filter(Boolean);
 const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-const adminKey = process.env.ADMIN_KEY; // <--- DEFINICIÓN DE LA LLAVE DE ADMIN
+
+// --- CONFIGURACIÓN DE LLAVE DE ADMIN ---
+const adminKey = process.env.ADMIN_KEY; //
 
 if (!process.env.JWT_SECRET) {
   throw new Error("Falta JWT_SECRET en .env");
@@ -96,7 +98,6 @@ app.post("/api/auth/login", async (req, res) => {
   return res.json({ token, user: { id: user.id, email: user.email } });
 });
 
-// --- RUTA DE CHECKOUT MODIFICADA (Suma envío y guarda teléfono) ---
 app.post("/api/orders/checkout", requireAuth, async (req, res) => {
   const { items, shipping, shippingAddress } = req.body;
   
@@ -278,12 +279,14 @@ app.get("/api/orders/:orderId/status", requireAuth, (req, res) => {
   });
 });
 
-// --- NUEVA RUTA DE ADMINISTRADOR INTEGRADA ---
+// --- RUTA DE ADMINISTRADOR (VERIFICADA) ---
 app.get("/api/admin/orders-view", (req, res) => {
-  const key = req.query.key;
+  const key = req.query.key; //
+  
   if (!adminKey) {
     return res.status(503).json({ error: "ADMIN_KEY no configurada en servidor" });
   }
+  
   if (!key || key !== adminKey) {
     return res.status(401).json({ error: "No autorizado" });
   }
