@@ -95,17 +95,23 @@ app.post("/api/auth/login", async (req, res) => {
   return res.json({ token, user: { id: user.id, email: user.email } });
 });
 
+// --- RUTA DE CHECKOUT MODIFICADA ---
 app.post("/api/orders/checkout", requireAuth, async (req, res) => {
-  const { items, shippingAddress } = req.body;
+  const { items, shipping, shippingAddress } = req.body; // Recibimos shipping
+  
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "El carrito esta vacio" });
   }
   if (!shippingAddress || typeof shippingAddress !== "object") {
     return res.status(400).json({ error: "Falta direccion de envio" });
   }
+
   const fullName = String(shippingAddress.fullName || "").trim();
   const address = String(shippingAddress.address || "").trim();
   const city = String(shippingAddress.city || "").trim();
+  const phone = String(shippingAddress.phone || "").trim(); // Recibimos teléfono
+  const shippingCost = Number(shipping || 0); // Convertimos costo a número
+
   if (fullName.length < 4 || address.length < 6 || city.length < 2) {
     return res.status(400).json({ error: "Direccion de envio invalida" });
   }
@@ -139,8 +145,9 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
     userEmail: req.user.email,
     status: "pending",
     items: normalizedItems,
-    shippingAddress: { fullName, address, city },
-    total: itemsTotal,
+    shippingCost: shippingCost, 
+    shippingAddress: { fullName, address, city, phone }, 
+    total: itemsTotal + shippingCost, 
     createdAt: new Date().toISOString(),
     mpPreferenceId: null,
     mpPaymentId: null
@@ -159,18 +166,33 @@ app.post("/api/orders/checkout", requireAuth, async (req, res) => {
 
   try {
     const preference = new Preference(mpClient);
+
+    // Construimos la lista de items para Mercado Pago
+    const mpItems = normalizedItems.map((item) => ({
+      id: item.productId,
+      title: item.title,
+      quantity: item.qty,
+      currency_id: "ARS",
+      unit_price: item.unitPrice
+    }));
+
+    // Si hay costo de envío, lo agregamos como un item para que se cobre
+    if (shippingCost > 0) {
+      mpItems.push({
+        id: "envio-ow",
+        title: "Costo de Envío",
+        quantity: 1,
+        currency_id: "ARS",
+        unit_price: shippingCost
+      });
+    }
+
     const response = await preference.create({
       body: {
-        items: [
-          ...normalizedItems.map((item) => ({
-            id: item.productId,
-            title: item.title,
-            quantity: item.qty,
-            currency_id: "ARS",
-            unit_price: item.unitPrice
-          }))
-        ],
-        payer: { email: req.user.email },
+        items: mpItems,
+        payer: { 
+          email: req.user.email 
+        },
         back_urls: {
           success: `${frontendUrls[0] || "http://localhost:5500"}/index.html?payment=success`,
           failure: `${frontendUrls[0] || "http://localhost:5500"}/index.html?payment=failure`,
