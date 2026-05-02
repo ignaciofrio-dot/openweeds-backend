@@ -184,11 +184,39 @@ app.get("/api/admin/orders-view", async (req, res) => {
   const key = req.query.key;
   if (!adminKey || key !== adminKey) return res.status(401).json({ error: "No autorizado" });
 
+  const ready =
+    mongoose.connection.readyState === 1; /** 1 = connected */
+  if (!mongoURI) {
+    return res.status(503).json({
+      error: "Mongo sin configurar",
+      detail: "Falta variable MONGO_URI en Render",
+    });
+  }
+  if (!ready) {
+    return res.status(503).json({
+      error: "Base de datos no conectada",
+      detail:
+        mongoURI.startsWith("mongodb")
+          ? "Revisá MONGO_URI, IP allowlist en Atlas y que el servicio haya iniciado tras el deploy."
+          : "Formato de MONGO_URI inválido o conexión aún en curso; probá de nuevo en unos segundos.",
+    });
+  }
+
   try {
-    const orders = await Order.find().sort({ createdAt: -1 }); //[cite: 1]
-    res.json({ count: orders.length, orders });
+    const orders = await Order.find()
+      .sort({ createdAt: -1 })
+      .lean();
+    const payload = orders.map((o) => ({
+      ...o,
+      id: o.id ?? (o._id != null ? String(o._id) : undefined),
+    }));
+    res.json({ count: payload.length, orders: payload });
   } catch (error) {
-    res.status(500).json({ error: "Error al obtener pedidos" });
+    console.error("[orders-view]", error);
+    res.status(500).json({
+      error: "Error al obtener pedidos",
+      detail: error?.message || String(error),
+    });
   }
 });
 
